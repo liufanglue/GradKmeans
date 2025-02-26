@@ -19,7 +19,7 @@ def kmeans_plus_plus_init(X, k):
     
     return centroids
 
-def kmeans_optimized(X, k, max_iters = 10, lr = 1e-3, tol = 1e-4):
+def kmeans_optimized(X, k, max_iters = 100000, lr = 1e-3, tol = 1e-4):
     n_points, n_dims = X.shape
 
     initial_centroids = kmeans_plus_plus_init(X, k)
@@ -39,11 +39,10 @@ def kmeans_optimized(X, k, max_iters = 10, lr = 1e-3, tol = 1e-4):
         mask = C.unsqueeze(-1)
         masked_diff = diff * mask
         distances_squared = torch.sum(masked_diff ** 2, dim = (1, 2))
-        
 
         reg_term = 1e-3 * torch.sum(torch.sqrt(torch.sum(C ** 2, dim = 0)))
         loss = torch.sum(distances_squared) + reg_term
-        #loss = torch.sum(distances_squared)
+        #print(f"distances_squared = {torch.sum(distances_squared)}, reg_term = {reg_term}")
 
         if abs(prev_loss - loss.item()) < tol:
             print(f"Converged at iteration {iteration}")
@@ -58,9 +57,12 @@ def kmeans_optimized(X, k, max_iters = 10, lr = 1e-3, tol = 1e-4):
         #temperature = max(0.1, 1 - iteration / max_iters)
         #with torch.no_grad():
         #    C.data = F.softmax(C.data / temperature, dim=1)
-    labels = torch.argmax(C, dim = 1)
-    final_centroids = torch.sum(C.unsqueeze(-1) * X.unsqueeze(1), dim = 0) / torch.sum(C, dim = 0).unsqueeze(1)
-    
+        labels = torch.argmax(C, dim = 1)
+        final_centroids = torch.sum(C.unsqueeze(-1) * X.unsqueeze(1), dim = 0) / torch.sum(C, dim = 0).unsqueeze(1)
+
+        totalDistance = CalKmeansTotalDistance(X, labels, centroids)
+        print(f"kmeans index = {iteration}, totalDistance = {totalDistance}")
+
     return labels, final_centroids
 
 def PrintTorch(data, des = '', isNeedPrintData = False):
@@ -76,34 +78,44 @@ def PrintTorch(data, des = '', isNeedPrintData = False):
             else:
                 print(f"des = {des}, shape = {data.shape}")
 
-n_points = 1000
-X = torch.randn(n_points, 3)
+def CalKmeansTotalDistance(X, labels, centroids):
+    sampleCenters = centroids[labels]
+    # 计算每个样本到其对应聚类中心的 1 范数
+    distances = torch.norm(X - sampleCenters, p = 1, dim = 1)
+    totalDistance = torch.sum(distances)
+    return totalDistance
 
-k = 2
+if __name__ == "__main__":
 
-startTime = datetime.now()
-labels, centroids = kmeans_optimized(X, k)
-endTime = datetime.now()
-print(f"time = {endTime - startTime}")
+    torch.manual_seed(10)
+    n_points = 1000
+    X = torch.randn(n_points, 3)
 
-labels = labels.detach().cpu().numpy()
-centroids = centroids.detach().cpu().numpy()
-X = X.detach().cpu().numpy()
+    k = 2
 
-fig = plt.figure(figsize=(10, 8))
-ax = fig.add_subplot(111, projection = '3d')
+    startTime = datetime.now()
+    labels, centroids = kmeans_optimized(X, k)
+    endTime = datetime.now()
+    print(f"time = {endTime - startTime}")
 
-colors = ['r', 'g', 'b']
-for i in range(k):
-    cluster_points = X[labels == i]
-    ax.scatter(cluster_points[ : , 0], cluster_points[ : , 1], cluster_points[ : , 2], c = colors[i], label = f'Cluster {i+1}')
+    labels = labels.detach().cpu().numpy()
+    centroids = centroids.detach().cpu().numpy()
+    X = X.detach().cpu().numpy()
 
-ax.scatter(centroids[ : , 0], centroids[ : , 1], centroids[ : , 2], c = 'black', s = 200, marker = '*', label = 'Centroids')
+    fig = plt.figure(figsize=(10, 8))
+    ax = fig.add_subplot(111, projection = '3d')
 
-ax.set_xlabel('X')
-ax.set_ylabel('Y')
-ax.set_zlabel('Z')
-ax.legend()
-plt.title('3D K-means Clustering (Optimized)')
-plt.show()
+    colors = ['r', 'g', 'b']
+    for i in range(k):
+        cluster_points = X[labels == i]
+        ax.scatter(cluster_points[ : , 0], cluster_points[ : , 1], cluster_points[ : , 2], c = colors[i], label = f'Cluster {i+1}')
+
+    ax.scatter(centroids[ : , 0], centroids[ : , 1], centroids[ : , 2], c = 'black', s = 200, marker = '*', label = 'Centroids')
+
+    ax.set_xlabel('X')
+    ax.set_ylabel('Y')
+    ax.set_zlabel('Z')
+    ax.legend()
+    plt.title('3D K-means Clustering (Optimized)')
+    plt.show()
 
